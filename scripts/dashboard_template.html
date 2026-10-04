@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AML Triage Results</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0; --surface-1: #fcfcfb; --border: #e3e1dc;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --text-muted: #77756f;
+  --grid: #ebeae6;
+  --s-dismiss: #2a78d6; --s-review: #eb6834; --s-escalate: #1baf7a;
+  --good: #0a7d0a; --critical: #c42f2f; --banner-bg: #fff4dc; --banner-border: #f0cf86;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #111110; --surface-1: #1a1a19; --border: #2e2e2c;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #9a998f;
+    --grid: #2a2a28;
+    --s-dismiss: #3987e5; --s-review: #d95926; --s-escalate: #199e70;
+    --good: #3cc23c; --critical: #e66767; --banner-bg: #3a2e12; --banner-border: #6b5520;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110; --surface-1: #1a1a19; --border: #2e2e2c;
+  --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #9a998f;
+  --grid: #2a2a28;
+  --s-dismiss: #3987e5; --s-review: #d95926; --s-escalate: #199e70;
+  --good: #3cc23c; --critical: #e66767; --banner-bg: #3a2e12; --banner-border: #6b5520;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { overflow-x: clip; max-width: 1180px; margin: 0 auto; padding: 28px 16px 60px; }
+header h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--text-secondary); }
+.banner { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; background: var(--banner-bg);
+  border: 1px solid var(--banner-border); color: var(--text-primary); font-size: 13px; }
+.grid { display: grid; gap: 12px; }
+.kpis { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin: 20px 0; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.kpi .label { color: var(--text-secondary); font-size: 12.5px; }
+.kpi .value { font-size: 28px; font-weight: 650; margin: 2px 0; font-variant-numeric: tabular-nums; }
+.kpi .sub { color: var(--text-muted); font-size: 12px; }
+.kpi .good { color: var(--good); } .kpi .bad { color: var(--critical); }
+h2 { font-size: 15px; margin: 0 0 12px; }
+.two { grid-template-columns: minmax(0,1.4fr) minmax(0,1fr); margin-bottom: 12px; }
+.two > * { min-width: 0; }
+@media (max-width: 820px) { .two { grid-template-columns: minmax(0,1fr); } .bars .row { grid-template-columns: 110px 1fr 36px; } }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--text-secondary); margin-bottom: 10px; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.split { display: flex; height: 34px; gap: 2px; border-radius: 6px; overflow: hidden; }
+.split div { min-width: 2px; }
+.split-labels { display: flex; gap: 2px; margin-top: 6px; font-size: 12.5px; color: var(--text-secondary); }
+.split-labels div { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.bars .row { display: grid; grid-template-columns: 150px 1fr 44px; align-items: center; gap: 10px; margin: 7px 0; }
+.bars .name { font-size: 12.5px; color: var(--text-secondary); text-align: right; }
+.bars .track { display: flex; gap: 2px; height: 18px; }
+.bars .seg { height: 100%; }
+.bars .seg:last-child { border-radius: 0 4px 4px 0; }
+.bars .n { font-size: 12.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.seg, .split div { cursor: default; }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.15); display: none; z-index: 10; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 12px;
+  border-bottom: 1px solid var(--border); padding: 8px 8px; white-space: nowrap; }
+td:first-child { white-space: nowrap; }
+td { border-bottom: 1px solid var(--grid); padding: 8px; vertical-align: top; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mini td.num { white-space: normal; }
+tr.main { cursor: pointer; } tr.main:hover td { background: var(--surface-0); }
+tr.detail td { background: var(--surface-0); color: var(--text-secondary); font-size: 12.5px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.mini { table-layout: fixed; }
+.mini td, .mini th { padding: 6px 4px; overflow-wrap: anywhere; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.controls button { font: inherit; font-size: 12.5px; padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); }
+.controls button[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+.controls input { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px; flex: 1; min-width: 180px;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+.pager { display: flex; justify-content: space-between; align-items: center; margin-top: 10px;
+  font-size: 12.5px; color: var(--text-muted); }
+.pager button { font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); }
+.pager button:disabled { opacity: .4; cursor: default; }
+.tablewrap { overflow-x: auto; }
+details summary { cursor: pointer; color: var(--text-muted); font-size: 12.5px; margin-top: 10px; }
+footer { margin-top: 18px; color: var(--text-muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AML Alert Triage: Results</h1>
+    <p id="meta"></p>
+    <div id="banner" class="banner" hidden></div>
+  </header>
+
+  <section class="grid kpis" id="kpis"></section>
+
+  <section class="grid two">
+    <div class="card">
+      <h2>Where the alerts went</h2>
+      <div class="legend" id="legend1"></div>
+      <div class="split" id="split"></div>
+      <div class="split-labels" id="splitLabels"></div>
+      <h2 style="margin-top:26px">Outcome by alert reason</h2>
+      <div class="legend" id="legend2"></div>
+      <div class="bars" id="bars"></div>
+      <details><summary>Show as table</summary>
+        <table class="mini" id="reasonTable"></table>
+      </details>
+    </div>
+    <div class="card">
+      <h2>Accuracy against known answers</h2>
+      <table class="mini" id="accTable"></table>
+      <h2 style="margin-top:22px">Analyst feedback</h2>
+      <table class="mini" id="revTable"></table>
+      <h2 style="margin-top:22px">Workload assumptions</h2>
+      <table class="mini" id="assTable"></table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Every decision, with its reasoning</h2>
+    <div class="controls">
+      <button data-f="all" aria-pressed="true">All</button>
+      <button data-f="auto_dismiss">Auto-closed</button>
+      <button data-f="flag_for_review">Analyst review</button>
+      <button data-f="escalate_senior">Senior escalation</button>
+      <input id="q" type="search" placeholder="Search alert, customer, reasoning..." aria-label="Search decisions">
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Alert</th><th>Reason flagged</th><th>Customer</th><th style="text-align:right">Amount (SAR)</th>
+          <th>Decision</th><th style="text-align:right">Confidence</th><th>Summary</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="pager"><span id="pageInfo"></span>
+      <span><button id="prev">Previous</button> <button id="next">Next</button></span></div>
+  </section>
+
+  <footer>Every decision above is also recorded in the append-only audit log. Click a row to read the full reasoning.</footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const D = __DATA__;
+const OUT = {
+  auto_dismiss:    { label: "Auto-closed",       c: "var(--s-dismiss)" },
+  flag_for_review: { label: "Analyst review",    c: "var(--s-review)" },
+  escalate_senior: { label: "Senior escalation", c: "var(--s-escalate)" },
+};
+const REASON = { amount_spike: "Amount spike", high_risk_country: "High-risk country", velocity: "Velocity",
+  counterparty_risk: "Counterparty risk", structuring: "Structuring", dormant_reactivation: "Dormant reactivation" };
+const fmt = n => n.toLocaleString("en-US");
+const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "-";
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const $ = id => document.getElementById(id);
+const K = D.kpi, A = D.accuracy;
+
+$("meta").textContent = `${fmt(K.triaged)} of ${fmt(D.total_alerts)} alerts triaged · engine: ${D.model} · generated ${D.generated_at}`;
+if (D.practice_mode) {
+  $("banner").hidden = false;
+  $("banner").textContent = "Practice mode: these results come from the rules baseline, not Claude. The rules were written with knowledge of the demo data, so accuracy is not a real-world claim. Re-run with Claude for portfolio numbers.";
+}
+
+const missed = A.genuine_total - A.genuine_caught;
+const kpis = [
+  ["Alerts triaged", fmt(K.triaged), `${fmt(K.audit_events)} audit-log events`],
+  ["Closed automatically", pct(K.dismissed, K.triaged), `${fmt(K.dismissed)} false positives cleared`],
+  ["Sent to a human", fmt(K.review + K.escalated), `${fmt(K.review)} analyst · ${fmt(K.escalated)} senior`],
+  ["Analyst time saved", K.saved_pct + "%", `${fmt(K.hours_before)} h → ${fmt(K.hours_after)} h`],
+  ["Est. cost saved", "$" + fmt(K.cost_saved_usd), `on this batch, at $${D.assumptions.hourly_usd}/h`],
+  ["Real risks caught", A.genuine_total ? `${A.genuine_caught}/${A.genuine_total}` : "-",
+    missed ? `<span class="bad">▲ ${missed} missed (auto-closed)</span>` : `<span class="good">✓ none auto-closed</span>`],
+];
+$("kpis").innerHTML = kpis.map(([l, v, s]) =>
+  `<div class="card kpi"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join("");
+
+const legend = Object.values(OUT).map(o => `<span style="--c:${o.c}">${o.label}</span>`).join("");
+$("legend1").innerHTML = legend; $("legend2").innerHTML = legend;
+
+// tooltip
+const tip = $("tip");
+function bindTip(el, html) {
+  el.addEventListener("mousemove", e => { tip.innerHTML = html; tip.style.display = "block";
+    const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px"; });
+  el.addEventListener("mouseleave", () => tip.style.display = "none");
+}
+
+// overall split
+const parts = [["auto_dismiss", K.dismissed], ["flag_for_review", K.review], ["escalate_senior", K.escalated]];
+parts.forEach(([k, v]) => {
+  if (!v) return;
+  const seg = document.createElement("div");
+  seg.style.flex = v; seg.style.background = OUT[k].c;
+  bindTip(seg, `<b>${OUT[k].label}</b><br>${fmt(v)} alerts · ${pct(v, K.triaged)}`);
+  $("split").appendChild(seg);
+  const lab = document.createElement("div");
+  lab.style.flex = v; lab.textContent = pct(v, K.triaged);
+  lab.title = OUT[k].label;
+  $("splitLabels").appendChild(lab);
+});
+
+// by reason
+const maxN = Math.max(...D.by_reason.map(r => r.dismissed + r.review + r.escalated), 1);
+D.by_reason.forEach(r => {
+  const total = r.dismissed + r.review + r.escalated;
+  const row = document.createElement("div"); row.className = "row";
+  row.innerHTML = `<div class="name">${REASON[r.reason] || r.reason}</div><div class="track" style="width:${100 * total / maxN}%"></div><div class="n">${fmt(total)}</div>`;
+  const track = row.querySelector(".track");
+  [["auto_dismiss", r.dismissed], ["flag_for_review", r.review], ["escalate_senior", r.escalated]].forEach(([k, v]) => {
+    if (!v) return;
+    const s = document.createElement("div"); s.className = "seg"; s.style.flex = v; s.style.background = OUT[k].c;
+    bindTip(s, `<b>${REASON[r.reason] || r.reason}</b><br>${OUT[k].label}: ${fmt(v)} of ${fmt(total)} (${pct(v, total)})`);
+    track.appendChild(s);
+  });
+  $("bars").appendChild(row);
+});
+$("reasonTable").innerHTML = `<tr><th>Reason</th><th>Auto-closed</th><th>Analyst</th><th>Senior</th></tr>` +
+  D.by_reason.map(r => `<tr><td>${REASON[r.reason] || r.reason}</td><td class="num">${r.dismissed}</td><td class="num">${r.review}</td><td class="num">${r.escalated}</td></tr>`).join("");
+
+// side tables
+$("accTable").innerHTML = A.genuine_total ? `
+  <tr><td>Genuine risks sent to a human</td><td class="num">${A.genuine_caught} / ${A.genuine_total} (${pct(A.genuine_caught, A.genuine_total)})</td></tr>
+  <tr><td>Genuine risks auto-closed (missed)</td><td class="num">${missed}</td></tr>
+  <tr><td>False positives auto-closed</td><td class="num">${A.fp_cleared} / ${A.fp_total} (${pct(A.fp_cleared, A.fp_total)})</td></tr>
+  <tr><td colspan="2" style="color:var(--text-muted);font-size:12px">Known answers exist only because this is synthetic demo data.</td></tr>`
+  : `<tr><td>No ground truth available.</td></tr>`;
+const R = D.reviews;
+$("revTable").innerHTML = R.total ? `
+  <tr><td>Decisions reviewed by analysts</td><td class="num">${R.total}</td></tr>
+  <tr><td>Analyst agreed (risk confirmed)</td><td class="num">${R.confirmed} (${pct(R.confirmed, R.total)})</td></tr>
+  <tr><td>Analyst found it legitimate</td><td class="num">${R.overturned} (${pct(R.overturned, R.total)})</td></tr>`
+  : `<tr><td style="color:var(--text-muted)">No analyst reviews recorded yet. Run <code>python -m scripts.audit_logger simulate-reviews</code> for a demo.</td></tr>`;
+$("assTable").innerHTML = `
+  <tr><td>Manual review per alert</td><td class="num">${D.assumptions.manual_min} min</td></tr>
+  <tr><td>AI-assisted review per alert</td><td class="num">${D.assumptions.assisted_min} min</td></tr>
+  <tr><td>Analyst cost per hour</td><td class="num">$${D.assumptions.hourly_usd}</td></tr>`;
+
+// decisions table
+let filter = "all", q = "", page = 0; const PER = 25;
+function filtered() {
+  const ql = q.toLowerCase();
+  return D.decisions.filter(d => (filter === "all" || d.decision === filter) &&
+    (!ql || [d.alert_id, d.full_name, d.reasoning, d.analyst_summary, d.alert_reason].join(" ").toLowerCase().includes(ql)));
+}
+function draw() {
+  const list = filtered(), pages = Math.max(1, Math.ceil(list.length / PER));
+  page = Math.min(page, pages - 1);
+  $("rows").innerHTML = list.slice(page * PER, page * PER + PER).map((d, i) => `
+    <tr class="main" data-i="${i}">
+      <td>${esc(d.alert_id)}</td><td>${esc(REASON[d.alert_reason] || d.alert_reason)}</td>
+      <td>${esc(d.full_name)}<br><span style="color:var(--text-muted);font-size:12px">${esc(d.occupation_or_sector)}</span></td>
+      <td class="num">${fmt(Math.round(d.amount_sar))}</td>
+      <td><span class="pill" style="--c:${OUT[d.decision].c}">${OUT[d.decision].label}</span></td>
+      <td class="num">${Math.round(d.confidence * 100)}%</td><td>${esc(d.analyst_summary)}</td></tr>
+    <tr class="detail" hidden><td colspan="7"><b>Reasoning:</b> ${esc(d.reasoning)}
+      ${d.analyst_override ? `<br><b>Analyst review:</b> ${esc(d.analyst_override)}${d.override_note ? " - " + esc(d.override_note) : ""}` : ""}
+      ${d.ground_truth ? `<br><b>Known answer (demo):</b> ${d.ground_truth === "genuine_risk" ? "genuine risk" : "false positive"}` : ""}</td></tr>`).join("");
+  $("pageInfo").textContent = list.length ? `${page * PER + 1}–${Math.min(list.length, (page + 1) * PER)} of ${fmt(list.length)}` : "No matching decisions";
+  $("prev").disabled = page === 0; $("next").disabled = page >= pages - 1;
+}
+$("rows").addEventListener("click", e => {
+  const tr = e.target.closest("tr.main"); if (tr) tr.nextElementSibling.hidden = !tr.nextElementSibling.hidden;
+});
+document.querySelectorAll(".controls button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll(".controls button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  filter = b.dataset.f; page = 0; draw();
+}));
+$("q").addEventListener("input", e => { q = e.target.value; page = 0; draw(); });
+$("prev").onclick = () => { page--; draw(); }; $("next").onclick = () => { page++; draw(); };
+draw();
+</script>
+</body>
+</html>

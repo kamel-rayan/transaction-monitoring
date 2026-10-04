@@ -1,0 +1,193 @@
+{
+  "name": "AML Alert Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aml-alert",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000001",
+      "name": "New alert from core AML system",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "5b0e6a4e-2a7c-4e43-9a51-aml000000001"
+    },
+    {
+      "parameters": {},
+      "id": "a1f0c001-0000-4000-8000-000000000002",
+      "name": "Run demo batch",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 260]
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:5000/alerts",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "status", "value": "new" },
+            { "name": "limit", "value": "10" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000003",
+      "name": "Fetch queued alerts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 260]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:5000/triage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ alert_id: $json.alert_id ?? $json.body.alert_id }) }}",
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000004",
+      "name": "Triage alert (Python + Claude)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 120]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "auto_dismiss",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Auto-dismiss"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "flag_for_review",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Analyst review"
+            },
+            {
+              "conditions": {
+                "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.decision }}",
+                    "rightValue": "escalate_senior",
+                    "operator": { "type": "string", "operation": "equals" }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Escalate"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000005",
+      "name": "Route by decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [720, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f1", "name": "queue", "value": "closed", "type": "string" },
+            { "id": "f2", "name": "action", "value": "Closed automatically. Decision and reasoning stored in the audit log.", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000006",
+      "name": "Close alert (false positive)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, -60]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f3", "name": "queue", "value": "analyst_review", "type": "string" },
+            { "id": "f4", "name": "action", "value": "Added to analyst queue with AI summary (target: 5-minute review).", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000007",
+      "name": "Send to analyst queue",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, 120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "f5", "name": "queue", "value": "senior_review", "type": "string" },
+            { "id": "f6", "name": "action", "value": "Escalated to senior analyst. Notification: Slack #aml-escalations (connect Slack node here).", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1f0c001-0000-4000-8000-000000000008",
+      "name": "Escalate to senior analyst",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [980, 300]
+    }
+  ],
+  "connections": {
+    "New alert from core AML system": {
+      "main": [[{ "node": "Triage alert (Python + Claude)", "type": "main", "index": 0 }]]
+    },
+    "Run demo batch": {
+      "main": [[{ "node": "Fetch queued alerts", "type": "main", "index": 0 }]]
+    },
+    "Fetch queued alerts": {
+      "main": [[{ "node": "Triage alert (Python + Claude)", "type": "main", "index": 0 }]]
+    },
+    "Triage alert (Python + Claude)": {
+      "main": [[{ "node": "Route by decision", "type": "main", "index": 0 }]]
+    },
+    "Route by decision": {
+      "main": [
+        [{ "node": "Close alert (false positive)", "type": "main", "index": 0 }],
+        [{ "node": "Send to analyst queue", "type": "main", "index": 0 }],
+        [{ "node": "Escalate to senior analyst", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

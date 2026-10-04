@@ -1,0 +1,14 @@
+# secrets
+.env
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+# generated (rebuild with: python -m scripts.generate_data)
+data/*.db
+data/*.db-journal
+data/*.csv
+reports/
+n8n_data/

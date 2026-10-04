@@ -1,0 +1,37 @@
+# One command runs the whole demo:   cd docker   then   docker compose up --build
+#   Triage API + dashboard -> http://localhost:5000/dashboard
+#   n8n                    -> http://localhost:5678  (import n8n/aml_alert_triage_workflow.json;
+#                             inside Docker, change 127.0.0.1:5000 in the two HTTP nodes to api:5000)
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: aml-triage-api
+    ports:
+      - "5000:5000"
+    environment:
+      - TRIAGE_MODE=${TRIAGE_MODE:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5}
+    volumes:
+      - triage_data:/app/data
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: aml-triage-n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=Asia/Riyadh
+      - TZ=Asia/Riyadh
+      - N8N_SECURE_COOKIE=false
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../n8n:/workflows:ro
+    depends_on:
+      - api
+
+volumes:
+  triage_data:
+  n8n_data:

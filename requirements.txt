@@ -1,0 +1,9 @@
+# Core
+anthropic>=0.40.0        # Claude API client
+flask>=3.0               # Triage engine API (called by n8n)
+pandas>=2.0              # Synthetic data generation + reporting
+python-dotenv>=1.0       # Loads .env config
+requests>=2.31           # Context lookups / health checks
+
+# Dev
+pytest>=8.0
